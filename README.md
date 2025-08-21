@@ -1,6 +1,6 @@
 # 🍲 Recipe Data Collection and API Development
 
-This project parses recipe data from a JSON file, stores it in a MongoDB database, exposes RESTful APIs with **Node.js + Express**, and provides a **React frontend** to view, search, and filter recipes.
+This project parses recipe data from a JSON file, stores it in a MongoDB database, exposes RESTful APIs with **Node.js + Express**, and provides a **frontend** to view, search, and filter recipes.
 
 ---
 
