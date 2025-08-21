@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Recipes | Securin Assignment</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" />
+  <style>
+    .truncate-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div class="max-w-7xl mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4">Securin Recipes</h1>
+
+    <!-- Filters -->
+    <div class="bg-white p-4 rounded shadow mb-4 grid grid-cols-1 md:grid-cols-6 gap-3">
+      <div class="col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Title</label>
+        <input id="f-title" class="w-full border p-2 rounded" placeholder="e.g., pie" />
+      </div>
+      <div class="col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Cuisine</label>
+        <input id="f-cuisine" class="w-full border p-2 rounded" placeholder="e.g., Southern" />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Rating</label>
+        <div class="flex">
+          <select id="f-rating-op" class="border p-2 rounded-l">
+            <option>>=</option>
+            <option><=</option>
+            <option>=</option>
+            <option>></option>
+            <option><</option>
+          </select>
+          <input id="f-rating-val" class="border p-2 rounded-r w-24" placeholder="4.5" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Calories</label>
+        <div class="flex">
+          <select id="f-cal-op" class="border p-2 rounded-l">
+            <option><=</option>
+            <option>>=</option>
+            <option>=</option>
+            <option>></option>
+            <option><</option>
+          </select>
+          <input id="f-cal-val" class="border p-2 rounded-r w-24" placeholder="400" />
+        </div>
+      </div>
+      <div class="md:col-span-6 flex gap-2">
+        <button id="btn-search" class="px-4 py-2 bg-blue-600 text-white rounded">Search</button>
+        <button id="btn-clear" class="px-4 py-2 bg-gray-200 rounded">Clear</button>
+      </div>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center gap-2">
+        <label>Per page:</label>
+        <select id="sel-limit" class="border p-1 rounded">
+          <option>15</option>
+          <option>20</option>
+          <option>30</option>
+          <option>50</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-prev" class="px-3 py-1 bg-gray-200 rounded">Prev</button>
+        <span id="lbl-page" class="min-w-[100px] text-center"></span>
+        <button id="btn-next" class="px-3 py-1 bg-gray-200 rounded">Next</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded shadow overflow-x-auto">
+      <table class="min-w-full">
+        <thead>
+          <tr class="bg-gray-100 text-left">
+            <th class="p-3 w-1/3">Title</th>
+            <th class="p-3">Cuisine</th>
+            <th class="p-3">Rating</th>
+            <th class="p-3">Total Time</th>
+            <th class="p-3">Serves</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="fallback" class="p-6 text-center text-gray-600 hidden">No results found</div>
+    </div>
+  </div>
+
+  <!-- Drawer -->
+  <div id="drawer-overlay" class="fixed inset-0 bg-black bg-opacity-30 hidden"></div>
+  <div id="drawer" class="fixed inset-y-0 right-0 w-full sm:w-[520px] bg-white shadow-2xl transform translate-x-full transition-transform"></div>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+  <script type="text/javascript">
+    const API_BASE = 'http://localhost:3000';
+
+    const state = {
+      page: 1,
+      limit: 15,
+      total: 0,
+      recipes: [],
+      searchMode: false,
+      lastQuery: ''
+    };
+
+    function $(id){ return document.getElementById(id); }
+
+    function stars(value){
+      const v = Number(value || 0);
+      const full = Math.floor(v);
+      const half = v - full >= 0.5;
+      let out = '';
+      for(let i=0;i<5;i++){
+        if(i < full) out += '★ ';
+        else if(i === full && half) out += '☆ ';
+        else out += '☆ ';
+      }
+      return out.trim();
+    }
+
+    async function fetchPage(){
+      const res = await axios.get(`${API_BASE}/api/recipes?page=${state.page}&limit=${state.limit}`);
+      state.recipes = res.data.data || [];
+      state.total = res.data.total || 0;
+      state.searchMode = false;
+      render();
+    }
+
+    async function runSearch(){
+      const t = $('f-title').value.trim();
+      const c = $('f-cuisine').value.trim();
+      const rop = $('f-rating-op').value;
+      const rval = $('f-rating-val').value.trim();
+      const cop = $('f-cal-op').value;
+      const cval = $('f-cal-val').value.trim();
+      const params = new URLSearchParams();
+      if(t) params.set('title', t);
+      if(c) params.set('cuisine', c);
+      if(rval) params.set('rating', `${rop}${rval}`);
+      if(cval) params.set('calories', `${cop}${cval}`);
+      const qs = params.toString();
+      const res = await axios.get(`${API_BASE}/api/recipes/search?${qs}`);
+      state.recipes = res.data.data || [];
+      state.total = state.recipes.length;
+      state.page = 1;
+      state.searchMode = true;
+      state.lastQuery = qs;
+      render();
+    }
+
+    function render(){
+      const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
+      $('lbl-page').textContent = state.searchMode
+        ? `Search results: ${state.total}`
+        : `Page ${state.page} of ${totalPages} (${state.total} total)`;
+
+      const tbody = $('tbody');
+      tbody.innerHTML = '';
+      const list = state.searchMode ? state.recipes : state.recipes;
+      if (!list || list.length === 0){
+        $('fallback').classList.remove('hidden');
+      } else {
+        $('fallback').classList.add('hidden');
+        const slice = state.searchMode ? list : list; // server paginates non-search
+        slice.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.className = 'border-b hover:bg-gray-50 cursor-pointer';
+          tr.addEventListener('click', () => openDrawer(row));
+
+          const titleTd = document.createElement('td');
+          titleTd.className = 'p-3';
+          titleTd.innerHTML = `<div class="truncate-2 font-medium" title="${row.title || ''}">${row.title || '-'}</div>`;
+
+          const cuisineTd = document.createElement('td');
+          cuisineTd.className = 'p-3';
+          cuisineTd.textContent = row.cuisine || '-';
+
+          const ratingTd = document.createElement('td');
+          ratingTd.className = 'p-3 font-semibold';
+          ratingTd.textContent = stars(row.rating);
+
+          const totalTd = document.createElement('td');
+          totalTd.className = 'p-3';
+          totalTd.textContent = (row.total_time ?? '-') + (row.total_time!=null?' mins':'');
+
+          const servesTd = document.createElement('td');
+          servesTd.className = 'p-3';
+          servesTd.textContent = row.serves || '-';
+
+          tr.appendChild(titleTd);
+          tr.appendChild(cuisineTd);
+          tr.appendChild(ratingTd);
+          tr.appendChild(totalTd);
+          tr.appendChild(servesTd);
+          tbody.appendChild(tr);
+        });
+      }
+    }
+
+    function openDrawer(recipe){
+      const overlay = $('drawer-overlay');
+      const drawer = $('drawer');
+      overlay.classList.remove('hidden');
+      drawer.classList.remove('translate-x-full');
+      drawer.innerHTML = `
+        <div class="h-full flex flex-col">
+          <div class="p-4 border-b flex justify-between items-center">
+            <div>
+              <h2 class="text-xl font-bold">${recipe.title || 'Untitled'}</h2>
+              <p class="text-sm text-gray-500">${recipe.cuisine || '-'}</p>
+            </div>
+            <button id="btn-close" class="px-3 py-1 rounded bg-gray-200">Close</button>
+          </div>
+          <div class="p-4 space-y-4 overflow-y-auto">
+            <div>
+              <div class="text-sm text-gray-500">Description</div>
+              <div class="text-gray-800">${recipe.description || '-'}</div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-sm text-gray-500">Total Time</div>
+                  <div class="text-gray-800 font-medium">${recipe.total_time ?? '-'}${recipe.total_time!=null?' mins':''}</div>
+                </div>
+                <button id="btn-expand" class="px-2 py-1 text-sm bg-gray-100 rounded">Expand</button>
+              </div>
+              <div id="expand-area" class="grid grid-cols-2 gap-3 mt-3 hidden">
+                <div>
+                  <div class="text-sm text-gray-500">Prep Time</div>
+                  <div class="text-gray-800">${recipe.prep_time ?? '-'}${recipe.prep_time!=null?' mins':''}</div>
+                </div>
+                <div>
+                  <div class="text-sm text-gray-500">Cook Time</div>
+                  <div class="text-gray-800">${recipe.cook_time ?? '-'}${recipe.cook_time!=null?' mins':''}</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="font-semibold mb-2">Nutrition</h3>
+              <table class="min-w-full text-sm border">
+                <tbody>
+                  ${['calories','carbohydrateContent','cholesterolContent','fiberContent','proteinContent','saturatedFatContent','sodiumContent','sugarContent','fatContent'].map(k => `
+                    <tr class="border-b">
+                      <td class="px-3 py-2 font-medium bg-gray-50 w-1/2">${k}</td>
+                      <td class="px-3 py-2">${(recipe.nutrients||{})[k] || '-'}</td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+      $('btn-close').onclick = closeDrawer;
+      $('drawer-overlay').onclick = closeDrawer;
+      $('btn-expand').onclick = () => {
+        const area = document.getElementById('expand-area');
+        area.classList.toggle('hidden');
+        $('btn-expand').textContent = area.classList.contains('hidden') ? 'Expand' : 'Hide';
+      };
+    }
+
+    function closeDrawer(){
+      $('drawer-overlay').classList.add('hidden');
+      $('drawer').classList.add('translate-x-full');
+    }
+
+    // Wire up controls
+    $('btn-search').onclick = runSearch;
+    $('btn-clear').onclick = () => {
+      $('f-title').value = '';
+      $('f-cuisine').value = '';
+      $('f-rating-val').value = '';
+      $('f-cal-val').value = '';
+      state.page = 1;
+      fetchPage();
+    };
+    $('btn-prev').onclick = () => {
+      if (state.searchMode) return;
+      if (state.page > 1) { state.page--; fetchPage(); }
+    };
+    $('btn-next').onclick = () => {
+      if (state.searchMode) return;
+      const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
+      if (state.page < totalPages) { state.page++; fetchPage(); }
+    };
+    $('sel-limit').onchange = (e) => {
+      state.limit = parseInt(e.target.value, 10);
+      state.page = 1;
+      fetchPage();
+    };
+
+    // Initial load
+    fetchPage().catch(err => {
+      console.error(err);
+      $('fallback').classList.remove('hidden');
+      $('fallback').textContent = 'Unable to load data. Is the API running?';
+    });
+  </script>
+</body>
+</html>
