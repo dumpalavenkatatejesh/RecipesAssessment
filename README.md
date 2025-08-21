@@ -45,6 +45,7 @@ This project parses recipe data from a JSON file, stores it in a MongoDB databas
   nutrients: Object,
   serves: String
 }
+```
 
 Getting Started
 1. Clone Repository
